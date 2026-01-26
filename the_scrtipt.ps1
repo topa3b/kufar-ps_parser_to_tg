@@ -401,6 +401,36 @@ function Get-ProcessedAdIds {
     return $hashSet
 }
 
+# Function to write log entry to daily log file
+function Write-ExecutionLog {
+    param (
+        [DateTime]$StartTime,
+        [DateTime]$EndTime,
+        [int]$NewItemsCount
+    )
+    
+    $logDirectory = ".\logs"
+    if (-not (Test-Path $logDirectory)) {
+        New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    }
+    
+    $logFileName = "log_$(Get-Date -Format 'yyyy-MM-dd').txt"
+    $logFilePath = Join-Path $logDirectory $logFileName
+    
+    $executionTime = $EndTime - $StartTime
+    $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $executionTime
+    
+    $logEntry = "[$($EndTime.ToString('yyyy-MM-dd HH:mm:ss'))] Execution completed in $executionTimeFormatted - New items detected: $NewItemsCount"
+    
+    try {
+        Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8
+        Write-Host "`nStatistics logged to: $logFilePath" -ForegroundColor Cyan
+    }
+    catch {
+        Write-Warning "Failed to write log entry: $_"
+    }
+}
+
 # Function to save processed ad_ids to JSON file
 function Save-ProcessedAdIds {
     param (
@@ -864,9 +894,18 @@ function Start-AdProcessing {
     } else {
         Write-Host "`nNo results to display." -ForegroundColor Yellow
     }
-}
+    
+        # Log execution statistics
+        $executionEndTime = Get-Date
+        $newItemsDetected = if ($null -ne $results -and $results.Count -gt 0) { $results.Count } else { 0 }
+        Write-ExecutionLog -StartTime $executionStartTime -EndTime $executionEndTime -NewItemsCount $newItemsDetected
+    }
     catch {
         Write-Error "Failed to retrieve or parse data: $_"
+        
+        # Log execution statistics even on error
+        $executionEndTime = Get-Date
+        Write-ExecutionLog -StartTime $executionStartTime -EndTime $executionEndTime -NewItemsCount 0
     }
 }
 

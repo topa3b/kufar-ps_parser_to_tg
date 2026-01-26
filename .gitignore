@@ -6,3 +6,6 @@ config.json
 
 # Processed ads file - contains tracking data
 processed_ads.json
+
+# Logs directory - contains execution statistics
+logs/
