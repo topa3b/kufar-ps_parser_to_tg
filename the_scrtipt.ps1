@@ -6,10 +6,10 @@ $url = "https://www.kufar.by/l/r~minsk/bez-posrednikov?ar=v.or%3A22%2C23%2C24%2C
 $IgnoreProcessed = $false
 
 # Path to JSON file storing processed ad_ids
-$ProcessedAdsFile = "processed_ads.json"
+$ProcessedAdsFile = ".\processed_ads.json"
 
 # Path to config file with Telegram bot settings
-$ConfigFile = "config.json"
+$ConfigFile = ".\config.json"
 
 # Replace 'YOUR_COOKIE_HERE' with your actual browser cookie string
 $cookieValue = "lang=ru; kuf_agr={%22advertisements%22:true%2C%22advertisements-non-personalized%22:false%2C%22statistic%22:true%2C%22mindbox%22:true}; tmr_lvid=9f3bcb730ebffdc0783608de69105724; tmr_lvidTS=1741774804987; mindboxDeviceUUID=f90a2502-77f8-4c75-9b3c-cb5305a9e014; directCrm-session=%7B%22deviceGuid%22%3A%22f90a2502-77f8-4c75-9b3c-cb5305a9e014%22%7D; kuf_SA_subscribe_user_attention=1; fullscreen_cookie=1; rl_anonymous_id=RS_ENC_v3_IjUxOTE2MDJhLWYxZTMtNGIwMC05ZDk5LTI4YjA5ZWE1ODlkMyI%3D; rl_page_init_referrer=RS_ENC_v3_IiRkaXJlY3Qi; _tt_enable_cookie=1; _ttp=01K8TFHTE8RCJAQA2T71QQKXTD_.tt.1; ttcsid_CGQMK0BC77UFB25SCB7G=1761825319377::qKBNWzX85fdLFSrSTBYT.1.1761825334318.0; _gid=GA1.2.2013796532.1769368410; domain_sid=_dREB_PxSMQ9P9Vv2BCXH%3A1769368411011; _gcl_au=1.1.1902094083.1761825318.1502841158.1769368418.1769368418; k_jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6InYyMCIsInNjaHYiOiIyIiwidHlwIjoiSldUIn0.eyJhaWQiOiI0MTEzOTU1IiwiY2FkIjpmYWxzZSwiZGlkIjoiZjA3NzBjZmYyMzgxMjA4OTUxOTRhMzAzZDlhNWY4YjEiLCJleHAiOjE4MDE1MDkyNTIsImlhdCI6MTc2OTM2ODQ1MiwianRpIjoiNDExMzk1NTphSjFwb0cyWSIsInB0ciI6ZmFsc2UsInR5cCI6InVzZXIifQ.oD3hiuQppT5GPeK0E_-K3yfUCIphuuSNb2s-pTIS8WQ; session_id=mc1xebb98a8a935a1d9df19561d6de491503ad536519; session=1; kufar_cart_id=84bf8842-ae08-4024-88f1-05d538a16453; supportOnlineTalkID=fd76bb9381b16b3e15e7e768278e16d5; web_push_banner_listings=3; kufar-header-ad-insertion-button-push=1; _ga=GA1.1.1948066428.1741774802; rl_session=RS_ENC_v3_eyJhdXRvVHJhY2siOnRydWUsInRpbWVvdXQiOjE4MDAwMDAsImV4cGlyZXNBdCI6MTc2OTM3NDc1NzU1MiwiaWQiOjE3NjkzNzI4NzgwNjAsInNlc3Npb25TdGFydCI6ZmFsc2V9; tmr_detect=1%7C1769372958093; _ga_ESH3WRCK3J=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; _ga_QTFZM0D0BE=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; ttcsid=1769373013151::YbinoYCqnJsNL82ftTdL.2.1769373023455.0; ttcsid_CRGUT0JC77UAQEJAHAL0=1769373013151::RVbRpmYlPgRmEqBUz6CX.1.1769373023458.1; kuf_VCH_promo_vas=2"
@@ -174,9 +174,10 @@ function Format-AdForTelegram {
     
     if ($AdResult.Description -and $AdResult.Description -ne "Failed to fetch") {
         # Escape HTML special characters and limit description length
+        # Limit to 800 chars to leave room for title, price, region, date, link, ID (total caption limit is 1024)
         $desc = $AdResult.Description -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;'
-        if ($desc.Length -gt 1000) {
-            $desc = $desc.Substring(0, 1000) + "..."
+        if ($desc.Length -gt 800) {
+            $desc = $desc.Substring(0, 800) + "..."
         }
         $message += "<i>$desc</i>`n"
         $message += "`n"
@@ -188,6 +189,38 @@ function Format-AdForTelegram {
 }
 
 # Function to send photo to Telegram
+# Helper function to truncate caption to Telegram's limit (1024 characters for photos)
+# Note: Using Format verb to avoid linter warning, but this is a truncation helper
+function Format-TelegramCaption {
+    param (
+        [string]$Caption,
+        [int]$MaxLength = 1024
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($Caption)) {
+        return $Caption
+    }
+    
+    if ($Caption.Length -le $MaxLength) {
+        return $Caption
+    }
+    
+    # Truncate and add ellipsis, but try to preserve HTML tags
+    $truncated = $Caption.Substring(0, $MaxLength - 3)
+    
+    # Try to close any open HTML tags by finding the last complete tag
+    $lastTagIndex = $truncated.LastIndexOf('<')
+    if ($lastTagIndex -gt 0) {
+        $afterLastTag = $truncated.Substring($lastTagIndex)
+        # If we're in the middle of a tag, truncate before it
+        if ($afterLastTag -notmatch '^<[^>]+>$') {
+            $truncated = $truncated.Substring(0, $lastTagIndex)
+        }
+    }
+    
+    return $truncated + "..."
+}
+
 function Send-TelegramPhoto {
     param (
         [string]$BotToken,
@@ -201,12 +234,15 @@ function Send-TelegramPhoto {
         return $false
     }
     
+    # Telegram photo caption limit is 1024 characters
+    $truncatedCaption = Format-TelegramCaption -Caption $Caption -MaxLength 1024
+    
     $apiUrl = "https://api.telegram.org/bot$BotToken/sendPhoto"
     
     $body = @{
         chat_id = $ChatId
         photo = $PhotoUrl
-        caption = $Caption
+        caption = $truncatedCaption
         parse_mode = "HTML"
     } | ConvertTo-Json
     
@@ -246,6 +282,9 @@ function Send-TelegramMediaGroup {
     
     $apiUrl = "https://api.telegram.org/bot$BotToken/sendMediaGroup"
     
+    # Telegram photo caption limit is 1024 characters
+    $truncatedCaption = Format-TelegramCaption -Caption $Caption -MaxLength 1024
+    
     $media = @()
     for ($i = 0; $i -lt $photosToSend.Count; $i++) {
         $mediaItem = @{
@@ -253,8 +292,8 @@ function Send-TelegramMediaGroup {
             media = $photosToSend[$i]
         }
         # Add caption only to the first photo
-        if ($i -eq 0 -and -not [string]::IsNullOrWhiteSpace($Caption)) {
-            $mediaItem.caption = $Caption
+        if ($i -eq 0 -and -not [string]::IsNullOrWhiteSpace($truncatedCaption)) {
+            $mediaItem.caption = $truncatedCaption
             $mediaItem.parse_mode = "HTML"
         }
         $media += $mediaItem
@@ -282,39 +321,65 @@ function Send-TelegramMediaGroup {
 }
 
 # Function to load processed ad_ids from JSON file
+# Always returns a HashSet[int], never null
 function Get-ProcessedAdIds {
     param (
         [string]$FilePath
     )
     
-    if (Test-Path $FilePath) {
-        try {
-            $content = Get-Content $FilePath -Raw | ConvertFrom-Json
-            $adIdsArray = $null
-            
-            if ($content -is [array]) {
-                $adIdsArray = $content
-            } elseif ($content.processed_ad_ids -is [array]) {
-                $adIdsArray = $content.processed_ad_ids
-            }
-            
-            if ($null -ne $adIdsArray -and $adIdsArray.Count -gt 0) {
-                # Create HashSet and add items one by one to ensure proper type conversion
-                $hashSet = [System.Collections.Generic.HashSet[int]]::new()
-                foreach ($id in $adIdsArray) {
-                    [void]$hashSet.Add([int]$id)
+    # Always initialize a HashSet at the start
+    $hashSet = [System.Collections.Generic.HashSet[int]]::new()
+    
+    try {
+        # Resolve the file path to handle relative paths correctly
+        $resolvedPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($FilePath)
+        
+        if (Test-Path $resolvedPath) {
+            try {
+                $content = Get-Content $resolvedPath -Raw | ConvertFrom-Json
+                $adIdsArray = $null
+                
+                if ($content -is [array]) {
+                    $adIdsArray = $content
+                } elseif ($null -ne $content -and $null -ne $content.processed_ad_ids -and $content.processed_ad_ids -is [array]) {
+                    $adIdsArray = $content.processed_ad_ids
                 }
-                return $hashSet
-            } else {
-                return [System.Collections.Generic.HashSet[int]]::new()
+                
+                if ($null -ne $adIdsArray -and $adIdsArray.Count -gt 0) {
+                    Write-Host "  Found $($adIdsArray.Count) ad IDs in file" -ForegroundColor Gray
+                    # Add items one by one to ensure proper type conversion
+                    foreach ($id in $adIdsArray) {
+                        try {
+                            [void]$hashSet.Add([int]$id)
+                        }
+                        catch {
+                            Write-Warning "Failed to add ad_id $id to HashSet: $_"
+                        }
+                    }
+                    Write-Host "  Successfully loaded $($hashSet.Count) ad IDs into HashSet" -ForegroundColor Gray
+                } else {
+                    Write-Host "  No ad IDs found in file (file may be empty or have different structure)" -ForegroundColor Yellow
+                }
             }
-        }
-        catch {
-            Write-Warning "Failed to load processed ad_ids from $FilePath : $_"
-            return [System.Collections.Generic.HashSet[int]]::new()
+            catch {
+                Write-Warning "Failed to load processed ad_ids from $resolvedPath : $_"
+            }
+        } else {
+            Write-Warning "File not found: $resolvedPath"
         }
     }
-    return [System.Collections.Generic.HashSet[int]]::new()
+    catch {
+        Write-Warning "Error in Get-ProcessedAdIds: $_"
+    }
+    finally {
+        # Ensure we always have a valid HashSet before returning
+        if ($null -eq $hashSet -or $hashSet -isnot [System.Collections.Generic.HashSet[int]]) {
+            $hashSet = [System.Collections.Generic.HashSet[int]]::new()
+        }
+    }
+    
+    # Explicitly return HashSet - this will always be a HashSet[int]
+    return $hashSet
 }
 
 # Function to save processed ad_ids to JSON file
@@ -400,8 +465,18 @@ function Get-AdDetails {
     }
 }
 
-try {
-    # 2. Load config for Telegram bot
+# Main function to process ads
+function Start-AdProcessing {
+    param (
+        [string]$Url,
+        [hashtable]$Headers,
+        [bool]$IgnoreProcessed,
+        [string]$ProcessedAdsFile,
+        [string]$ConfigFile
+    )
+    
+    try {
+        # 2. Load config for Telegram bot
     Write-Host "Loading config from $ConfigFile..." -ForegroundColor Cyan
     $config = Get-Config -FilePath $ConfigFile
     $telegramEnabled = $false
@@ -424,11 +499,12 @@ try {
     # 3. Load processed ad_ids
     Write-Host "Loading processed ad_ids from $ProcessedAdsFile..." -ForegroundColor Cyan
     $processedAdIds = Get-ProcessedAdIds -FilePath $ProcessedAdsFile
-    if ($null -ne $processedAdIds) {
-        Write-Host "Found $($processedAdIds.Count) already processed ad_ids" -ForegroundColor Yellow
-    } else {
+    # Ensure $processedAdIds is always a HashSet
+    if ($null -eq $processedAdIds) {
         Write-Host "No processed ad_ids found (starting fresh)" -ForegroundColor Yellow
         $processedAdIds = [System.Collections.Generic.HashSet[int]]::new()
+    } else {
+        Write-Host "Found $($processedAdIds.Count) already processed ad_ids" -ForegroundColor Yellow
     }
     
     if ($IgnoreProcessed) {
@@ -438,7 +514,7 @@ try {
     # 4. Fetch the listing page content
     Write-Host "Fetching listing page content..." -ForegroundColor Cyan
     try {
-        $webResponse = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing
+        $webResponse = Invoke-WebRequest -Uri $Url -Headers $Headers -UseBasicParsing
         if ($null -eq $webResponse) {
             throw "Web response is null"
         }
@@ -502,7 +578,7 @@ try {
 
     # 8. Filter ads based on processed list (unless IgnoreProcessed is true)
     if ($IgnoreProcessed) {
-        $ads = $allAds
+        $ads = $allAds;
         if ($null -ne $ads) {
             Write-Host "Processing all $($ads.Count) advertisements (ignoring processed list)`n" -ForegroundColor Green
         } else {
@@ -510,15 +586,8 @@ try {
         }
     } else {
         if ($null -ne $allAds) {
-            $ads = $allAds | Where-Object { 
-                if ($null -eq $_ -or $null -eq $_.ad_id) { 
-                    $false 
-                } else { 
-                    # Convert ad_id to int to ensure type match with HashSet
-                    $adIdInt = [int]$_.ad_id
-                    -not $processedAdIds.Contains($adIdInt) 
-                }
-            }
+            # filter out $allAds to leave only ads that are not in $processedAdIds
+            $ads = $allAds | Where-Object { -not $processedAdIds.Contains([int]$_.ad_id) }
             # Ensure $ads is an array even if Where-Object returns null
             if ($null -eq $ads) {
                 $ads = @()
@@ -549,7 +618,7 @@ try {
         # 10. Fetch details from each ad_link
         $results = @()
         $random = New-Object System.Random
-        $newlyProcessedAdIds = [System.Collections.Generic.HashSet[int]]::new()
+        $newlyProcessedCount = 0
         $adIndex = 0
         
         $ads | ForEach-Object {
@@ -565,10 +634,19 @@ try {
                 return
             }
             
+            # Double-check that this ad hasn't been processed (safety check)
+            if ($null -ne $ad.ad_id -and -not $IgnoreProcessed) {
+                $adIdInt = [int]$ad.ad_id
+                if ($processedAdIds.Contains($adIdInt)) {
+                    Write-Host "  - Ad ID $adId already processed, skipping Get-AdDetails" -ForegroundColor Yellow
+                    return
+                }
+            }
+            
             # Random delay between 1-3 seconds (except for first request)
             $delay = if ($adIndex -eq 1) { 0 } else { $random.Next(1, 3) }
             
-            $adDetails = Get-AdDetails -AdLink $ad.ad_link -RequestHeaders $headers -DelaySeconds $delay
+            $adDetails = Get-AdDetails -AdLink $ad.ad_link -RequestHeaders $Headers -DelaySeconds $delay
             
             $price = if ($null -ne $ad.price_byn) { $ad.price_byn / 100 } else { 0 }
             $region = if ($null -ne $ad.ad_parameters) { 
@@ -611,8 +689,20 @@ try {
                 # Mark as processed only if fetch was successful
                 if ($null -ne $ad.ad_id) {
                     $adIdInt = [int]$ad.ad_id
-                    [void]$newlyProcessedAdIds.Add($adIdInt)
-                    [void]$processedAdIds.Add($adIdInt)
+                    # Ensure $processedAdIds is a HashSet before adding
+                    if ($processedAdIds -isnot [System.Collections.Generic.HashSet[int]]) {
+                        Write-Warning "processedAdIds is not a HashSet, recreating..."
+                        $tempSet = [System.Collections.Generic.HashSet[int]]::new()
+                        if ($null -ne $processedAdIds) {
+                            foreach ($existingId in $processedAdIds) {
+                                [void]$tempSet.Add([int]$existingId)
+                            }
+                        }
+                        $processedAdIds = $tempSet
+                    }
+                    if ($processedAdIds.Add($adIdInt)) {
+                        $newlyProcessedCount++
+                    }
                 }
             } else {
                 Write-Host "  ✗ Failed to fetch details" -ForegroundColor Red
@@ -620,8 +710,8 @@ try {
         }
         
         # 11. Save processed ad_ids to JSON file
-        if ($newlyProcessedAdIds.Count -gt 0) {
-            Write-Host "`nSaving $($newlyProcessedAdIds.Count) newly processed ad_ids..." -ForegroundColor Cyan
+        if ($newlyProcessedCount -gt 0) {
+            Write-Host "`nSaving $newlyProcessedCount newly processed ad_ids..." -ForegroundColor Cyan
             Save-ProcessedAdIds -ProcessedAdIds $processedAdIds -FilePath $ProcessedAdsFile
         } else {
             Write-Host "`nNo new ads processed, skipping save." -ForegroundColor Yellow
@@ -708,14 +798,7 @@ try {
                     Send-TelegramMessage -BotToken $botToken -ChatId $chatId -Message $telegramMessage | Out-Null
                 }
             } else {
-                # Multiple ads - send summary first, then individual ads
-                $summaryMessage = "<b>Found $($results.Count) new ads</b>`n`n"
-                Send-TelegramMessage -BotToken $botToken -ChatId $chatId -Message $summaryMessage | Out-Null
-                
-                # Small delay before sending individual ads
-                Start-Sleep -Milliseconds 500
-                
-                # Send each ad with photos
+                # Multiple ads - send each ad with photos
                 foreach ($result in $results) {
                     $telegramMessage = Format-AdForTelegram -AdResult $result
                     
@@ -763,6 +846,21 @@ try {
         Write-Host "`nNo results to display." -ForegroundColor Yellow
     }
 }
-catch {
-    Write-Error "Failed to retrieve or parse data: $_"
+    catch {
+        Write-Error "Failed to retrieve or parse data: $_"
+    }
 }
+
+# Call the main function
+# Start-AdProcessing arguments:
+#   -Url: Kufar listing URL to scrape
+#   -Headers: HTTP headers hashtable containing Cookie and User-Agent
+#   -IgnoreProcessed: Boolean flag - if $true, reprocess all ads; if $false, skip already processed ads
+#   -ProcessedAdsFile: Path to JSON file storing processed ad IDs
+#   -ConfigFile: Path to JSON config file with Telegram bot settings
+Start-AdProcessing `
+    -Url $url `
+    -Headers $headers `
+    -IgnoreProcessed $IgnoreProcessed `
+    -ProcessedAdsFile $ProcessedAdsFile `
+    -ConfigFile $ConfigFile
