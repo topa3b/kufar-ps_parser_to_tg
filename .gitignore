@@ -1,0 +1,8 @@
+# Cookie file - contains sensitive authentication data
+cookie.txt
+
+# Config file - contains Telegram bot credentials
+config.json
+
+# Processed ads file - contains tracking data
+processed_ads.json

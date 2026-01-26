@@ -11,8 +11,27 @@ $ProcessedAdsFile = ".\processed_ads.json"
 # Path to config file with Telegram bot settings
 $ConfigFile = ".\config.json"
 
-# Replace 'YOUR_COOKIE_HERE' with your actual browser cookie string
-$cookieValue = "lang=ru; kuf_agr={%22advertisements%22:true%2C%22advertisements-non-personalized%22:false%2C%22statistic%22:true%2C%22mindbox%22:true}; tmr_lvid=9f3bcb730ebffdc0783608de69105724; tmr_lvidTS=1741774804987; mindboxDeviceUUID=f90a2502-77f8-4c75-9b3c-cb5305a9e014; directCrm-session=%7B%22deviceGuid%22%3A%22f90a2502-77f8-4c75-9b3c-cb5305a9e014%22%7D; kuf_SA_subscribe_user_attention=1; fullscreen_cookie=1; rl_anonymous_id=RS_ENC_v3_IjUxOTE2MDJhLWYxZTMtNGIwMC05ZDk5LTI4YjA5ZWE1ODlkMyI%3D; rl_page_init_referrer=RS_ENC_v3_IiRkaXJlY3Qi; _tt_enable_cookie=1; _ttp=01K8TFHTE8RCJAQA2T71QQKXTD_.tt.1; ttcsid_CGQMK0BC77UFB25SCB7G=1761825319377::qKBNWzX85fdLFSrSTBYT.1.1761825334318.0; _gid=GA1.2.2013796532.1769368410; domain_sid=_dREB_PxSMQ9P9Vv2BCXH%3A1769368411011; _gcl_au=1.1.1902094083.1761825318.1502841158.1769368418.1769368418; k_jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6InYyMCIsInNjaHYiOiIyIiwidHlwIjoiSldUIn0.eyJhaWQiOiI0MTEzOTU1IiwiY2FkIjpmYWxzZSwiZGlkIjoiZjA3NzBjZmYyMzgxMjA4OTUxOTRhMzAzZDlhNWY4YjEiLCJleHAiOjE4MDE1MDkyNTIsImlhdCI6MTc2OTM2ODQ1MiwianRpIjoiNDExMzk1NTphSjFwb0cyWSIsInB0ciI6ZmFsc2UsInR5cCI6InVzZXIifQ.oD3hiuQppT5GPeK0E_-K3yfUCIphuuSNb2s-pTIS8WQ; session_id=mc1xebb98a8a935a1d9df19561d6de491503ad536519; session=1; kufar_cart_id=84bf8842-ae08-4024-88f1-05d538a16453; supportOnlineTalkID=fd76bb9381b16b3e15e7e768278e16d5; web_push_banner_listings=3; kufar-header-ad-insertion-button-push=1; _ga=GA1.1.1948066428.1741774802; rl_session=RS_ENC_v3_eyJhdXRvVHJhY2siOnRydWUsInRpbWVvdXQiOjE4MDAwMDAsImV4cGlyZXNBdCI6MTc2OTM3NDc1NzU1MiwiaWQiOjE3NjkzNzI4NzgwNjAsInNlc3Npb25TdGFydCI6ZmFsc2V9; tmr_detect=1%7C1769372958093; _ga_ESH3WRCK3J=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; _ga_QTFZM0D0BE=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; ttcsid=1769373013151::YbinoYCqnJsNL82ftTdL.2.1769373023455.0; ttcsid_CRGUT0JC77UAQEJAHAL0=1769373013151::RVbRpmYlPgRmEqBUz6CX.1.1769373023458.1; kuf_VCH_promo_vas=2"
+# Cookie file path
+$CookieFile = ".\cookie.txt"
+
+# Read cookie value from file
+if (Test-Path $CookieFile) {
+    try {
+        $cookieValue = Get-Content $CookieFile -Raw -ErrorAction Stop
+        $cookieValue = $cookieValue.Trim()
+        if ([string]::IsNullOrWhiteSpace($cookieValue)) {
+            Write-Error "Cookie file is empty: $CookieFile"
+            exit 1
+        }
+    }
+    catch {
+        Write-Error "Failed to read cookie file: $CookieFile - $_"
+        exit 1
+    }
+} else {
+    Write-Error "Cookie file not found: $CookieFile. Please create it with your browser cookie string."
+    exit 1
+}
 
 $headers = @{
     "Cookie" = $cookieValue
