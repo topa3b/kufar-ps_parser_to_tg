@@ -404,8 +404,7 @@ function Get-ProcessedAdIds {
 # Function to write log entry to daily log file
 function Write-ExecutionLog {
     param (
-        [DateTime]$StartTime,
-        [DateTime]$EndTime,
+        [TimeSpan]$ExecutionTime,
         [int]$NewItemsCount
     )
     
@@ -417,10 +416,10 @@ function Write-ExecutionLog {
     $logFileName = "log_$(Get-Date -Format 'yyyy-MM-dd').txt"
     $logFilePath = Join-Path $logDirectory $logFileName
     
-    $executionTime = $EndTime - $StartTime
-    $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $executionTime
+    $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $ExecutionTime
+    $endTime = Get-Date
     
-    $logEntry = "[$($EndTime.ToString('yyyy-MM-dd HH:mm:ss'))] Execution completed in $executionTimeFormatted - New items detected: $NewItemsCount"
+    $logEntry = "[$($endTime.ToString('yyyy-MM-dd HH:mm:ss'))] Execution completed in $executionTimeFormatted - New items detected: $NewItemsCount"
     
     try {
         Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8
@@ -523,6 +522,9 @@ function Start-AdProcessing {
         [string]$ProcessedAdsFile,
         [string]$ConfigFile
     )
+    
+    # Start execution timer
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     
     try {
         # 2. Load config for Telegram bot
@@ -896,16 +898,18 @@ function Start-AdProcessing {
     }
     
         # Log execution statistics
-        $executionEndTime = Get-Date
+        $stopwatch.Stop()
+        $executionTime = [TimeSpan]::FromMilliseconds($stopwatch.ElapsedMilliseconds)
         $newItemsDetected = if ($null -ne $results -and $results.Count -gt 0) { $results.Count } else { 0 }
-        Write-ExecutionLog -StartTime $executionStartTime -EndTime $executionEndTime -NewItemsCount $newItemsDetected
+        Write-ExecutionLog -ExecutionTime $executionTime -NewItemsCount $newItemsDetected
     }
     catch {
         Write-Error "Failed to retrieve or parse data: $_"
         
         # Log execution statistics even on error
-        $executionEndTime = Get-Date
-        Write-ExecutionLog -StartTime $executionStartTime -EndTime $executionEndTime -NewItemsCount 0
+        $stopwatch.Stop()
+        $executionTime = [TimeSpan]::FromMilliseconds($stopwatch.ElapsedMilliseconds)
+        Write-ExecutionLog -ExecutionTime $executionTime -NewItemsCount 0
     }
 }
 
