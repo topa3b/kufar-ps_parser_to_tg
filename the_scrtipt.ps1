@@ -8,12 +8,277 @@ $IgnoreProcessed = $false
 # Path to JSON file storing processed ad_ids
 $ProcessedAdsFile = "processed_ads.json"
 
+# Path to config file with Telegram bot settings
+$ConfigFile = "config.json"
+
 # Replace 'YOUR_COOKIE_HERE' with your actual browser cookie string
 $cookieValue = "lang=ru; kuf_agr={%22advertisements%22:true%2C%22advertisements-non-personalized%22:false%2C%22statistic%22:true%2C%22mindbox%22:true}; tmr_lvid=9f3bcb730ebffdc0783608de69105724; tmr_lvidTS=1741774804987; mindboxDeviceUUID=f90a2502-77f8-4c75-9b3c-cb5305a9e014; directCrm-session=%7B%22deviceGuid%22%3A%22f90a2502-77f8-4c75-9b3c-cb5305a9e014%22%7D; kuf_SA_subscribe_user_attention=1; fullscreen_cookie=1; rl_anonymous_id=RS_ENC_v3_IjUxOTE2MDJhLWYxZTMtNGIwMC05ZDk5LTI4YjA5ZWE1ODlkMyI%3D; rl_page_init_referrer=RS_ENC_v3_IiRkaXJlY3Qi; _tt_enable_cookie=1; _ttp=01K8TFHTE8RCJAQA2T71QQKXTD_.tt.1; ttcsid_CGQMK0BC77UFB25SCB7G=1761825319377::qKBNWzX85fdLFSrSTBYT.1.1761825334318.0; _gid=GA1.2.2013796532.1769368410; domain_sid=_dREB_PxSMQ9P9Vv2BCXH%3A1769368411011; _gcl_au=1.1.1902094083.1761825318.1502841158.1769368418.1769368418; k_jwt=eyJhbGciOiJIUzI1NiIsImtpZCI6InYyMCIsInNjaHYiOiIyIiwidHlwIjoiSldUIn0.eyJhaWQiOiI0MTEzOTU1IiwiY2FkIjpmYWxzZSwiZGlkIjoiZjA3NzBjZmYyMzgxMjA4OTUxOTRhMzAzZDlhNWY4YjEiLCJleHAiOjE4MDE1MDkyNTIsImlhdCI6MTc2OTM2ODQ1MiwianRpIjoiNDExMzk1NTphSjFwb0cyWSIsInB0ciI6ZmFsc2UsInR5cCI6InVzZXIifQ.oD3hiuQppT5GPeK0E_-K3yfUCIphuuSNb2s-pTIS8WQ; session_id=mc1xebb98a8a935a1d9df19561d6de491503ad536519; session=1; kufar_cart_id=84bf8842-ae08-4024-88f1-05d538a16453; supportOnlineTalkID=fd76bb9381b16b3e15e7e768278e16d5; web_push_banner_listings=3; kufar-header-ad-insertion-button-push=1; _ga=GA1.1.1948066428.1741774802; rl_session=RS_ENC_v3_eyJhdXRvVHJhY2siOnRydWUsInRpbWVvdXQiOjE4MDAwMDAsImV4cGlyZXNBdCI6MTc2OTM3NDc1NzU1MiwiaWQiOjE3NjkzNzI4NzgwNjAsInNlc3Npb25TdGFydCI6ZmFsc2V9; tmr_detect=1%7C1769372958093; _ga_ESH3WRCK3J=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; _ga_QTFZM0D0BE=GS2.1.s1769372874$o9$g1$t1769372958$j60$l0$h0; ttcsid=1769373013151::YbinoYCqnJsNL82ftTdL.2.1769373023455.0; ttcsid_CRGUT0JC77UAQEJAHAL0=1769373013151::RVbRpmYlPgRmEqBUz6CX.1.1769373023458.1; kuf_VCH_promo_vas=2"
 
 $headers = @{
     "Cookie" = $cookieValue
     "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+
+# Function to load config from JSON file
+function Get-Config {
+    param (
+        [string]$FilePath
+    )
+    
+    if (-not (Test-Path $FilePath)) {
+        Write-Error "Config file not found: $FilePath. Please create it with telegram.bot_token and telegram.chat_id"
+        return $null
+    }
+    
+    try {
+        $content = Get-Content $FilePath -Raw | ConvertFrom-Json
+        if ($null -eq $content.telegram -or 
+            [string]::IsNullOrWhiteSpace($content.telegram.bot_token) -or 
+            [string]::IsNullOrWhiteSpace($content.telegram.chat_id)) {
+            Write-Error "Config file is missing telegram.bot_token or telegram.chat_id"
+            return $null
+        }
+        return $content
+    }
+    catch {
+        Write-Error "Failed to load config from $FilePath : $_"
+        return $null
+    }
+}
+
+# Function to send message to Telegram bot
+function Send-TelegramMessage {
+    param (
+        [string]$BotToken,
+        [string]$ChatId,
+        [string]$Message,
+        [string]$ParseMode = "HTML"
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($BotToken) -or [string]::IsNullOrWhiteSpace($ChatId)) {
+        Write-Warning "Telegram bot token or chat ID is missing. Skipping Telegram notification."
+        return $false
+    }
+    
+    # Telegram API has a 4096 character limit per message
+    $maxLength = 4096
+    if ($Message.Length -gt $maxLength) {
+        # Split message into chunks
+        $chunks = @()
+        $currentChunk = ""
+        $lines = $Message -split "`n"
+        
+        foreach ($line in $lines) {
+            if (($currentChunk.Length + $line.Length + 1) -gt $maxLength) {
+                if ($currentChunk.Length -gt 0) {
+                    $chunks += $currentChunk
+                    $currentChunk = $line
+                } else {
+                    # Line itself is too long, truncate it
+                    $chunks += $line.Substring(0, $maxLength - 3) + "..."
+                    $currentChunk = ""
+                }
+            } else {
+                if ($currentChunk.Length -gt 0) {
+                    $currentChunk += "`n" + $line
+                } else {
+                    $currentChunk = $line
+                }
+            }
+        }
+        if ($currentChunk.Length -gt 0) {
+            $chunks += $currentChunk
+        }
+        
+        # Send each chunk
+        $success = $true
+        for ($i = 0; $i -lt $chunks.Count; $i++) {
+            $chunkMessage = if ($chunks.Count -gt 1) { 
+                "Part $($i + 1)/$($chunks.Count)`n`n" + $chunks[$i] 
+            } else { 
+                $chunks[$i] 
+            }
+            if (-not (Send-TelegramMessageChunk -BotToken $BotToken -ChatId $ChatId -Message $chunkMessage -ParseMode $ParseMode)) {
+                $success = $false
+            }
+            # Small delay between chunks
+            if ($i -lt $chunks.Count - 1) {
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        return $success
+    } else {
+        return Send-TelegramMessageChunk -BotToken $BotToken -ChatId $ChatId -Message $Message -ParseMode $ParseMode
+    }
+}
+
+# Helper function to send a single message chunk to Telegram
+function Send-TelegramMessageChunk {
+    param (
+        [string]$BotToken,
+        [string]$ChatId,
+        [string]$Message,
+        [string]$ParseMode = "HTML"
+    )
+    
+    $apiUrl = "https://api.telegram.org/bot$BotToken/sendMessage"
+    
+    $body = @{
+        chat_id = $ChatId
+        text = $Message
+        parse_mode = $ParseMode
+        disable_web_page_preview = $false
+    } | ConvertTo-Json
+    
+    try {
+        Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
+        Write-Host "✓ Message sent to Telegram successfully" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to send message to Telegram: $_"
+        if ($_.Exception.Response) {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            Write-Warning "Response: $responseBody"
+        }
+        return $false
+    }
+}
+
+# Function to format ad results for Telegram
+function Format-AdForTelegram {
+    param (
+        [PSCustomObject]$AdResult
+    )
+    
+    $message = "<b>$($AdResult.Title)</b>`n"
+    $message += "<b>$($AdResult.Price_BYN) BYN</b>`n"
+    $message += "$($AdResult.Region)`n"
+    
+    # Format list_time if available
+    if ($AdResult.ListTime -and -not [string]::IsNullOrWhiteSpace($AdResult.ListTime)) {
+        try {
+            $listDate = [DateTime]::Parse($AdResult.ListTime)
+            $formattedDate = $listDate.ToString("yyyy-MM-dd HH:mm")
+            $message += "Posted: $formattedDate`n"
+        }
+        catch {
+            # If parsing fails, use the original string
+            $message += "Posted: $($AdResult.ListTime)`n"
+        }
+    }
+    
+    $message += "<a href=`"$($AdResult.Link)`">View on Kufar</a>`n"
+    $message += "`n"
+    
+    if ($AdResult.Description -and $AdResult.Description -ne "Failed to fetch") {
+        # Escape HTML special characters and limit description length
+        $desc = $AdResult.Description -replace '&', '&amp;' -replace '<', '&lt;' -replace '>', '&gt;'
+        if ($desc.Length -gt 1000) {
+            $desc = $desc.Substring(0, 1000) + "..."
+        }
+        $message += "<i>$desc</i>`n"
+        $message += "`n"
+    }
+    
+    $message += "ID: $($AdResult.Ad_ID)"
+    
+    return $message
+}
+
+# Function to send photo to Telegram
+function Send-TelegramPhoto {
+    param (
+        [string]$BotToken,
+        [string]$ChatId,
+        [string]$PhotoUrl,
+        [string]$Caption = ""
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($BotToken) -or [string]::IsNullOrWhiteSpace($ChatId)) {
+        Write-Warning "Telegram bot token or chat ID is missing. Skipping photo."
+        return $false
+    }
+    
+    $apiUrl = "https://api.telegram.org/bot$BotToken/sendPhoto"
+    
+    $body = @{
+        chat_id = $ChatId
+        photo = $PhotoUrl
+        caption = $Caption
+        parse_mode = "HTML"
+    } | ConvertTo-Json
+    
+    try {
+        Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
+        Write-Host "Photo sent to Telegram successfully" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to send photo to Telegram: $_"
+        if ($_.Exception.Response) {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            Write-Warning "Response: $responseBody"
+        }
+        return $false
+    }
+}
+
+# Function to send media group (multiple photos) to Telegram
+function Send-TelegramMediaGroup {
+    param (
+        [string]$BotToken,
+        [string]$ChatId,
+        [array]$PhotoUrls,
+        [string]$Caption = ""
+    )
+    
+    if ([string]::IsNullOrWhiteSpace($BotToken) -or [string]::IsNullOrWhiteSpace($ChatId)) {
+        Write-Warning "Telegram bot token or chat ID is missing. Skipping media group."
+        return $false
+    }
+    
+    # Telegram allows max 10 photos per media group
+    $maxPhotos = 10
+    $photosToSend = $PhotoUrls[0..([Math]::Min($PhotoUrls.Count - 1, $maxPhotos - 1))]
+    
+    $apiUrl = "https://api.telegram.org/bot$BotToken/sendMediaGroup"
+    
+    $media = @()
+    for ($i = 0; $i -lt $photosToSend.Count; $i++) {
+        $mediaItem = @{
+            type = "photo"
+            media = $photosToSend[$i]
+        }
+        # Add caption only to the first photo
+        if ($i -eq 0 -and -not [string]::IsNullOrWhiteSpace($Caption)) {
+            $mediaItem.caption = $Caption
+            $mediaItem.parse_mode = "HTML"
+        }
+        $media += $mediaItem
+    }
+    
+    $body = @{
+        chat_id = $ChatId
+        media = $media
+    } | ConvertTo-Json -Depth 10
+    
+    try {
+        Invoke-RestMethod -Uri $apiUrl -Method Post -Body $body -ContentType "application/json" -ErrorAction Stop | Out-Null
+        Write-Host "Media group sent to Telegram successfully ($($photosToSend.Count) photos)" -ForegroundColor Green
+        return $true
+    }
+    catch {
+        Write-Warning "Failed to send media group to Telegram: $_"
+        if ($_.Exception.Response) {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            Write-Warning "Response: $responseBody"
+        }
+        return $false
+    }
 }
 
 # Function to load processed ad_ids from JSON file
@@ -25,10 +290,21 @@ function Get-ProcessedAdIds {
     if (Test-Path $FilePath) {
         try {
             $content = Get-Content $FilePath -Raw | ConvertFrom-Json
+            $adIdsArray = $null
+            
             if ($content -is [array]) {
-                return [System.Collections.Generic.HashSet[int]]::new($content)
+                $adIdsArray = $content
             } elseif ($content.processed_ad_ids -is [array]) {
-                return [System.Collections.Generic.HashSet[int]]::new($content.processed_ad_ids)
+                $adIdsArray = $content.processed_ad_ids
+            }
+            
+            if ($null -ne $adIdsArray -and $adIdsArray.Count -gt 0) {
+                # Create HashSet and add items one by one to ensure proper type conversion
+                $hashSet = [System.Collections.Generic.HashSet[int]]::new()
+                foreach ($id in $adIdsArray) {
+                    [void]$hashSet.Add([int]$id)
+                }
+                return $hashSet
             } else {
                 return [System.Collections.Generic.HashSet[int]]::new()
             }
@@ -105,7 +381,7 @@ function Get-AdDetails {
         
         # Extract description and gallery images
         $description = $data.props.initialState.adView.data.description
-        $galleryImages = $data.props.initialState.adView.data.gallery.images
+        $galleryImages = $data.props.initialState.adView.data.gallery.thumbnails
         
         return @{
             Description = $description
@@ -125,7 +401,27 @@ function Get-AdDetails {
 }
 
 try {
-    # 2. Load processed ad_ids
+    # 2. Load config for Telegram bot
+    Write-Host "Loading config from $ConfigFile..." -ForegroundColor Cyan
+    $config = Get-Config -FilePath $ConfigFile
+    $telegramEnabled = $false
+    $botToken = $null
+    $chatId = $null
+    
+    if ($null -ne $config) {
+        $botToken = $config.telegram.bot_token
+        $chatId = $config.telegram.chat_id
+        if (-not [string]::IsNullOrWhiteSpace($botToken) -and -not [string]::IsNullOrWhiteSpace($chatId)) {
+            $telegramEnabled = $true
+            Write-Host "Telegram notifications enabled" -ForegroundColor Green
+        } else {
+            Write-Warning "Telegram bot token or chat ID is missing in config. Telegram notifications will be disabled."
+        }
+    } else {
+        Write-Warning "Failed to load config. Telegram notifications will be disabled."
+    }
+    
+    # 3. Load processed ad_ids
     Write-Host "Loading processed ad_ids from $ProcessedAdsFile..." -ForegroundColor Cyan
     $processedAdIds = Get-ProcessedAdIds -FilePath $ProcessedAdsFile
     if ($null -ne $processedAdIds) {
@@ -139,7 +435,7 @@ try {
         Write-Host "IgnoreProcessed flag is set to `$true - will reprocess all ads" -ForegroundColor Yellow
     }
 
-    # 3. Fetch the listing page content
+    # 4. Fetch the listing page content
     Write-Host "Fetching listing page content..." -ForegroundColor Cyan
     try {
         $webResponse = Invoke-WebRequest -Uri $url -Headers $headers -UseBasicParsing
@@ -157,7 +453,7 @@ try {
         throw
     }
 
-    # 4. Extract the JSON from the __NEXT_DATA__ script tag
+    # 5. Extract the JSON from the __NEXT_DATA__ script tag
     Write-Host "Extracting JSON from __NEXT_DATA__..." -ForegroundColor Cyan
     try {
         $jsonString = Get-NextDataJson -HtmlContent $htmlContent
@@ -172,7 +468,7 @@ try {
         throw
     }
 
-    # 5. Parse JSON
+    # 6. Parse JSON
     Write-Host "Parsing JSON..." -ForegroundColor Cyan
     try {
         $data = $jsonString | ConvertFrom-Json -AsHashTable
@@ -186,7 +482,7 @@ try {
         throw
     }
 
-    # 6. Access the ads list with null checks
+    # 7. Access the ads list with null checks
     if ($null -eq $data -or $null -eq $data.props -or $null -eq $data.props.initialState -or 
         $null -eq $data.props.initialState.listing -or $null -eq $data.props.initialState.listing.ads) {
         Write-Error "Could not find ads in the expected data structure. The page structure may have changed."
@@ -204,7 +500,7 @@ try {
         exit 1
     }
 
-    # 7. Filter ads based on processed list (unless IgnoreProcessed is true)
+    # 8. Filter ads based on processed list (unless IgnoreProcessed is true)
     if ($IgnoreProcessed) {
         $ads = $allAds
         if ($null -ne $ads) {
@@ -218,7 +514,9 @@ try {
                 if ($null -eq $_ -or $null -eq $_.ad_id) { 
                     $false 
                 } else { 
-                    -not $processedAdIds.Contains($_.ad_id) 
+                    # Convert ad_id to int to ensure type match with HashSet
+                    $adIdInt = [int]$_.ad_id
+                    -not $processedAdIds.Contains($adIdInt) 
                 }
             }
             # Ensure $ads is an array even if Where-Object returns null
@@ -235,7 +533,7 @@ try {
         }
     }
 
-    # 8. Display initial ad list
+    # 9. Display initial ad list
     if ($null -ne $ads -and $ads.Count -gt 0) {
         Write-Host "Initial Ad List:" -ForegroundColor Green
         $ads | Select-Object `
@@ -248,29 +546,27 @@ try {
 
         Write-Host "`nFetching detailed information from each ad...`n" -ForegroundColor Green
 
-        # 9. Fetch details from each ad_link
+        # 10. Fetch details from each ad_link
         $results = @()
         $random = New-Object System.Random
         $newlyProcessedAdIds = [System.Collections.Generic.HashSet[int]]::new()
+        $adIndex = 0
         
-        for ($i = 0; $i -lt $ads.Count; $i++) {
-            $ad = $ads[$i]
-            if ($null -eq $ad) {
-                Write-Warning "Ad at index $i is null, skipping..."
-                continue
-            }
+        $ads | ForEach-Object {
+            $ad = $_;
+            $adIndex++
             
             $adTitle = if ($null -ne $ad.subject) { $ad.subject } else { "Unknown" }
             $adId = if ($null -ne $ad.ad_id) { $ad.ad_id } else { "Unknown" }
-            Write-Host "`n[$($i + 1)/$($ads.Count)] Processing: $adTitle (ID: $adId)" -ForegroundColor Cyan
+            Write-Host "`n[$adIndex/$($ads.Count)] Processing: $adTitle (ID: $adId)" -ForegroundColor Cyan
             
             if ($null -eq $ad.ad_link -or [string]::IsNullOrWhiteSpace($ad.ad_link)) {
                 Write-Warning "Ad link is null or empty for ad ID: $adId, skipping..."
-                continue
+                return
             }
             
             # Random delay between 1-3 seconds (except for first request)
-            $delay = if ($i -eq 0) { 0 } else { $random.Next(1, 3) }
+            $delay = if ($adIndex -eq 1) { 0 } else { $random.Next(1, 3) }
             
             $adDetails = Get-AdDetails -AdLink $ad.ad_link -RequestHeaders $headers -DelaySeconds $delay
             
@@ -280,6 +576,9 @@ try {
             } else { 
                 $null 
             }
+            
+            # Extract list_time
+            $listTime = if ($null -ne $ad.list_time) { $ad.list_time } else { $null }
             
             # Clean up description: remove multiple consecutive newlines
             $cleanDescription = if ($null -ne $adDetails -and $adDetails.Success -and $null -ne $adDetails.Description) { 
@@ -295,6 +594,7 @@ try {
                 Price_BYN = $price
                 Link = $ad.ad_link
                 Region = $region
+                ListTime = $listTime
                 Description = $cleanDescription
                 ImageCount = if ($null -ne $adDetails -and $adDetails.Success -and $null -ne $adDetails.GalleryImages) { $adDetails.GalleryImages.Count } else { 0 }
                 Images = if ($null -ne $adDetails -and $adDetails.Success -and $null -ne $adDetails.GalleryImages) { $adDetails.GalleryImages } else { @() }
@@ -306,19 +606,20 @@ try {
             # Display summary for this ad
             if ($null -ne $adDetails -and $adDetails.Success) {
                 $descLength = if ($null -ne $result.Description) { $result.Description.Length } else { 0 }
-                Write-Host "  ✓ Description: $descLength characters" -ForegroundColor Green
-                Write-Host "  ✓ Gallery Images: $($result.ImageCount)" -ForegroundColor Green
+                Write-Host "  - Description: $descLength characters" -ForegroundColor Green
+                Write-Host "  - Gallery Images: $($result.ImageCount)" -ForegroundColor Green
                 # Mark as processed only if fetch was successful
                 if ($null -ne $ad.ad_id) {
-                    [void]$newlyProcessedAdIds.Add($ad.ad_id)
-                    [void]$processedAdIds.Add($ad.ad_id)
+                    $adIdInt = [int]$ad.ad_id
+                    [void]$newlyProcessedAdIds.Add($adIdInt)
+                    [void]$processedAdIds.Add($adIdInt)
                 }
             } else {
                 Write-Host "  ✗ Failed to fetch details" -ForegroundColor Red
             }
         }
         
-        # 10. Save processed ad_ids to JSON file
+        # 11. Save processed ad_ids to JSON file
         if ($newlyProcessedAdIds.Count -gt 0) {
             Write-Host "`nSaving $($newlyProcessedAdIds.Count) newly processed ad_ids..." -ForegroundColor Cyan
             Save-ProcessedAdIds -ProcessedAdIds $processedAdIds -FilePath $ProcessedAdsFile
@@ -330,7 +631,7 @@ try {
         $results = @()
     }
 
-    # 11. Display final results summary
+    # 12. Display final results summary
     if ($results.Count -gt 0) {
         Write-Host "`n" -NoNewline
         Write-Host "=" * 80 -ForegroundColor Green
@@ -346,7 +647,7 @@ try {
             FetchSuccess | 
             Format-Table -AutoSize
         
-        # 12. Display detailed results with descriptions and image URLs
+        # 13. Display detailed results with descriptions and image URLs
         Write-Host "`nDETAILED RESULTS:" -ForegroundColor Green
         foreach ($result in $results) {
             Write-Host "`n" + ("=" * 80) -ForegroundColor Cyan
@@ -363,6 +664,100 @@ try {
                     Write-Host "  - $imgUrl" -ForegroundColor Gray
                 }
             }
+        }
+        
+        # 14. Send results to Telegram
+        if ($telegramEnabled) {
+            Write-Host "`nSending results to Telegram..." -ForegroundColor Cyan
+            
+            if ($results.Count -eq 1) {
+                # Single ad - send with photos
+                $result = $results[0]
+                $telegramMessage = Format-AdForTelegram -AdResult $result
+                
+                # Extract image URLs
+                $imageUrls = @()
+                if ($result.Images -and $result.Images.Count -gt 0) {
+                    foreach ($img in $result.Images) {
+                        $imgUrl = $null
+                        if ($img -is [hashtable] -or $img -is [PSCustomObject]) {
+                            # Try common URL properties
+                            if ($img.url) { $imgUrl = $img.url }
+                            elseif ($img.src) { $imgUrl = $img.src }
+                            elseif ($img.href) { $imgUrl = $img.href }
+                        } elseif ($img -is [string]) {
+                            $imgUrl = $img
+                        }
+                        if ($imgUrl -and -not [string]::IsNullOrWhiteSpace($imgUrl)) {
+                            $imageUrls += $imgUrl
+                        }
+                    }
+                }
+                
+                # Send photos with message
+                if ($imageUrls.Count -gt 0) {
+                    if ($imageUrls.Count -eq 1) {
+                        # Single photo
+                        Send-TelegramPhoto -BotToken $botToken -ChatId $chatId -PhotoUrl $imageUrls[0] -Caption $telegramMessage | Out-Null
+                    } else {
+                        # Multiple photos - use media group
+                        Send-TelegramMediaGroup -BotToken $botToken -ChatId $chatId -PhotoUrls $imageUrls -Caption $telegramMessage | Out-Null
+                    }
+                } else {
+                    # No photos - send text message only
+                    Send-TelegramMessage -BotToken $botToken -ChatId $chatId -Message $telegramMessage | Out-Null
+                }
+            } else {
+                # Multiple ads - send summary first, then individual ads
+                $summaryMessage = "<b>Found $($results.Count) new ads</b>`n`n"
+                Send-TelegramMessage -BotToken $botToken -ChatId $chatId -Message $summaryMessage | Out-Null
+                
+                # Small delay before sending individual ads
+                Start-Sleep -Milliseconds 500
+                
+                # Send each ad with photos
+                foreach ($result in $results) {
+                    $telegramMessage = Format-AdForTelegram -AdResult $result
+                    
+                    # Extract image URLs
+                    $imageUrls = @()
+                    if ($result.Images -and $result.Images.Count -gt 0) {
+                        foreach ($img in $result.Images) {
+                            $imgUrl = $null
+                            if ($img -is [hashtable] -or $img -is [PSCustomObject]) {
+                                # Try common URL properties
+                                if ($img.url) { $imgUrl = $img.url }
+                                elseif ($img.src) { $imgUrl = $img.src }
+                                elseif ($img.href) { $imgUrl = $img.href }
+                            } elseif ($img -is [string]) {
+                                $imgUrl = $img
+                            }
+                            if ($imgUrl -and -not [string]::IsNullOrWhiteSpace($imgUrl)) {
+                                $imageUrls += $imgUrl
+                            }
+                        }
+                    }
+                    
+                    # Send photos with message
+                    if ($imageUrls.Count -gt 0) {
+                        if ($imageUrls.Count -eq 1) {
+                            # Single photo
+                            Send-TelegramPhoto -BotToken $botToken -ChatId $chatId -PhotoUrl $imageUrls[0] -Caption $telegramMessage | Out-Null
+                        } else {
+                            # Multiple photos - use media group
+                            Send-TelegramMediaGroup -BotToken $botToken -ChatId $chatId -PhotoUrls $imageUrls -Caption $telegramMessage | Out-Null
+                        }
+                    } else {
+                        # No photos - send text message only
+                        Send-TelegramMessage -BotToken $botToken -ChatId $chatId -Message $telegramMessage | Out-Null
+                    }
+                    
+                    # Small delay between messages to avoid rate limiting
+                    Start-Sleep -Milliseconds 500
+                }
+            }
+            
+            Write-Host "Telegram notifications sent" -ForegroundColor Green
         }
     } else {
         Write-Host "`nNo results to display." -ForegroundColor Yellow
