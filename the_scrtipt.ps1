@@ -14,6 +14,41 @@ $ConfigFile = ".\config.json"
 # Cookie file path
 $CookieFile = ".\cookie.txt"
 
+# Keywords to filter ads by description: for each item, every keyword found in Description increments "weight".
+# If weight exceeds WeightMax, the ad is skipped from being sent to Telegram.
+$FilterKeywords = @(
+    "Google",
+    "Apple",
+    "Microsoft",
+    "Xiaomi",
+    "Huawei",
+    "Oppo",
+    "Vivo",
+    "Realme",
+    "OnePlus",
+    "Nokia",
+    "LG",
+    "Redmi",
+    "Prime",
+    "Motorola",
+    "Poco",
+    "pocophone",
+    "iphone",
+    "razr",
+    "xperia",
+    "honor",
+    "fold",
+    "z flip",
+    "reno",
+    "sony",
+    "xperia",
+    "zenfone",
+    "asus"
+)
+
+# Maximum allowed keyword weight; ads with weight > WeightMax are not sent to Telegram.
+$WeightMax = 4
+
 # Read cookie value from file
 if (Test-Path $CookieFile) {
     try {
@@ -401,11 +436,12 @@ function Get-ProcessedAdIds {
     return $hashSet
 }
 
-# Function to write log entry to daily log file
+# Function to write a log entry to the daily log file. Call from any place with a custom message.
+# Each line is prefixed with [yyyy-MM-dd HH:mm:ss]. Log file: .\logs\log_yyyy-MM-dd.txt
 function Write-ExecutionLog {
     param (
-        [TimeSpan]$ExecutionTime,
-        [int]$NewItemsCount
+        [Parameter(Mandatory = $true)]
+        [string]$Message
     )
     
     $logDirectory = ".\logs"
@@ -415,15 +451,12 @@ function Write-ExecutionLog {
     
     $logFileName = "log_$(Get-Date -Format 'yyyy-MM-dd').txt"
     $logFilePath = Join-Path $logDirectory $logFileName
-    
-    $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $ExecutionTime
-    $endTime = Get-Date
-    
-    $logEntry = "[$($endTime.ToString('yyyy-MM-dd HH:mm:ss'))] Execution completed in $executionTimeFormatted - New items detected: $NewItemsCount"
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "[$timestamp] $Message"
     
     try {
         Add-Content -Path $logFilePath -Value $logEntry -Encoding UTF8
-        Write-Host "`nStatistics logged to: $logFilePath" -ForegroundColor Cyan
+        Write-Host "Logged to: $logFilePath" -ForegroundColor Cyan
     }
     catch {
         Write-Warning "Failed to write log entry: $_"
@@ -520,7 +553,9 @@ function Start-AdProcessing {
         [hashtable]$Headers,
         [bool]$IgnoreProcessed,
         [string]$ProcessedAdsFile,
-        [string]$ConfigFile
+        [string]$ConfigFile,
+        [string[]]$FilterKeywords = @(),
+        [int]$WeightMax = 3
     )
     
     # Start execution timer
@@ -807,13 +842,33 @@ function Start-AdProcessing {
             }
         }
         
-        # 14. Send results to Telegram
+        # 14. Filter results by keyword weight (skip sending to Telegram if weight > WeightMax)
+        $resultsForTelegram = @()
+        foreach ($result in $results) {
+            $desc = if ($result.Description) { $result.Description } else { "" }
+            $weight = 0
+            foreach ($kw in $FilterKeywords) {
+                if (-not [string]::IsNullOrWhiteSpace($kw)) {
+                    $weight += ([regex]::Matches($desc, [regex]::Escape($kw), 'IgnoreCase')).Count
+                }
+            }
+            Write-Host "Keyword weight for ad ID $($result.Ad_ID): $weight" -ForegroundColor Yellow
+            if ($weight -le $WeightMax) {
+                $resultsForTelegram += $result
+            } else {
+                Write-Host "Skipping ad ID $($result.Ad_ID) from Telegram (keyword weight $weight > $WeightMax)" -ForegroundColor Yellow
+            }
+        }
+
+        Write-ExecutionLog -Message "Number of found items: $($results.Count); Number of items to send to Telegram: $($resultsForTelegram.Count);"
+
+        # 15. Send results to Telegram
         if ($telegramEnabled) {
             Write-Host "`nSending results to Telegram..." -ForegroundColor Cyan
             
-            if ($results.Count -eq 1) {
+            if ($resultsForTelegram.Count -eq 1) {
                 # Single ad - send with photos
-                $result = $results[0]
+                $result = $resultsForTelegram[0]
                 $telegramMessage = Format-AdForTelegram -AdResult $result
                 
                 # Extract image URLs
@@ -850,7 +905,7 @@ function Start-AdProcessing {
                 }
             } else {
                 # Multiple ads - send each ad with photos
-                foreach ($result in $results) {
+                foreach ($result in $resultsForTelegram) {
                     $telegramMessage = Format-AdForTelegram -AdResult $result
                     
                     # Extract image URLs
@@ -891,7 +946,11 @@ function Start-AdProcessing {
                 }
             }
             
-            Write-Host "Telegram notifications sent" -ForegroundColor Green
+            if ($resultsForTelegram.Count -gt 0) {
+                Write-Host "Telegram notifications sent ($($resultsForTelegram.Count) ads)" -ForegroundColor Green
+            } else {
+                Write-Host "No ads sent to Telegram (all filtered by keyword weight or none to send)" -ForegroundColor Yellow
+            }
         }
     } else {
         Write-Host "`nNo results to display." -ForegroundColor Yellow
@@ -901,7 +960,8 @@ function Start-AdProcessing {
         $stopwatch.Stop()
         $executionTime = [TimeSpan]::FromMilliseconds($stopwatch.ElapsedMilliseconds)
         $newItemsDetected = if ($null -ne $results -and $results.Count -gt 0) { $results.Count } else { 0 }
-        Write-ExecutionLog -ExecutionTime $executionTime -NewItemsCount $newItemsDetected
+        $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $executionTime
+        Write-ExecutionLog -Message "Execution completed in $executionTimeFormatted - New items detected: $newItemsDetected"
     }
     catch {
         Write-Error "Failed to retrieve or parse data: $_"
@@ -909,7 +969,8 @@ function Start-AdProcessing {
         # Log execution statistics even on error
         $stopwatch.Stop()
         $executionTime = [TimeSpan]::FromMilliseconds($stopwatch.ElapsedMilliseconds)
-        Write-ExecutionLog -ExecutionTime $executionTime -NewItemsCount 0
+        $executionTimeFormatted = "{0:hh\:mm\:ss}" -f $executionTime
+        Write-ExecutionLog -Message "Execution failed after $executionTimeFormatted - New items: 0"
     }
 }
 
@@ -920,9 +981,13 @@ function Start-AdProcessing {
 #   -IgnoreProcessed: Boolean flag - if $true, reprocess all ads; if $false, skip already processed ads
 #   -ProcessedAdsFile: Path to JSON file storing processed ad IDs
 #   -ConfigFile: Path to JSON config file with Telegram bot settings
+#   -FilterKeywords: Array of keywords; each match in Description increments weight
+#   -WeightMax: Ads with weight > WeightMax are not sent to Telegram
 Start-AdProcessing `
     -Url $url `
     -Headers $headers `
     -IgnoreProcessed $IgnoreProcessed `
     -ProcessedAdsFile $ProcessedAdsFile `
-    -ConfigFile $ConfigFile
+    -ConfigFile $ConfigFile `
+    -FilterKeywords $FilterKeywords `
+    -WeightMax $WeightMax
