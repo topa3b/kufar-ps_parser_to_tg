@@ -14,6 +14,9 @@ $ConfigFile = ".\config.json"
 # Cookie file path
 $CookieFile = ".\cookie.txt"
 
+# Cost statistics module (Save-CostStat, Get-CostStats)
+Import-Module (Join-Path $PSScriptRoot "05-stats.psm1") -Force
+
 # Keywords to filter ads by description: for each item, every keyword found in Description increments "weight".
 # If weight exceeds WeightMax, the ad is skipped from being sent to Telegram.
 $FilterKeywords = @(
@@ -945,7 +948,14 @@ function Start-AdProcessing {
                     Start-Sleep -Milliseconds 500
                 }
             }
-            
+
+            # Save cost statistics for each item sent to Telegram
+            foreach ($result in $resultsForTelegram) {
+                if ($null -ne $result.Ad_ID -and $null -ne $result.Price_BYN) {
+                    Save-CostStat -ItemId ([string]$result.Ad_ID) -Cost ([double]$result.Price_BYN) | Out-Null
+                }
+            }
+
             if ($resultsForTelegram.Count -gt 0) {
                 Write-Host "Telegram notifications sent ($($resultsForTelegram.Count) ads)" -ForegroundColor Green
             } else {
