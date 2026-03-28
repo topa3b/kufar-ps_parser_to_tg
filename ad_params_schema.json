@@ -1,0 +1,401 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "ADParams Schema",
+    "type": "object",
+    "properties": {
+        "adParams": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "number"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "region": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "number"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "area": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "remunerationType": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesType": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesSize": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesWoman": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesBrand": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesClass": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesFrameSize": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "bicyclesWheelsSize": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                },
+                "condition": {
+                    "type": "object",
+                    "properties": {
+                        "pl": {
+                            "type": "string"
+                        },
+                        "vl": {
+                            "type": "string"
+                        },
+                        "p": {
+                            "type": "string"
+                        },
+                        "v": {
+                            "type": "string"
+                        },
+                        "pu": {
+                            "type": "string"
+                        },
+                        "order": {
+                            "type": "number"
+                        }
+                    },
+                    "required": [
+                        "pl",
+                        "vl",
+                        "p",
+                        "v",
+                        "pu",
+                        "order"
+                    ]
+                }
+            },
+            "required": [
+                "category",
+                "region",
+                "area",
+                "remunerationType",
+                "bicyclesType",
+                "bicyclesSize",
+                "bicyclesWoman",
+                "bicyclesBrand",
+                "bicyclesClass",
+                "bicyclesFrameSize",
+                "bicyclesWheelsSize",
+                "condition"
+            ]
+        }
+    },
+    "required": [
+        "adParams"
+    ]
+}
